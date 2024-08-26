@@ -1,18 +1,15 @@
 import streamlit as st
-import mysql.connector
+import sqlite3
 import datetime
 import base64
 import requests
-from openpyxl import load_workbook
+import os
 
 # Database connection function
 def get_database_connection():
-    return mysql.connector.connect(
-        host='localhost',
-        user='root',
-        password='',
-        database='xiezhong'
-    )
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, 'xiezhong.db')
+    return sqlite3.connect(db_path)
 
 def get_technicien_options():
     conn = get_database_connection()
@@ -36,7 +33,7 @@ def get_type_options():
 
     conn.close()
 
-    return [result[0] for result in results]  # Extract the first column from each row
+    return [result[0] for result in results]
 
 def get_shift_options():
     conn = get_database_connection()
@@ -48,7 +45,7 @@ def get_shift_options():
 
     conn.close()
 
-    return [result[0] for result in results]  # Extract the first column from each row
+    return [result[0] for result in results]
 
 def get_parc_options():
     conn = get_database_connection()
@@ -66,7 +63,7 @@ def get_machine_options(parc_id):
     conn = get_database_connection()
     cursor = conn.cursor()
 
-    query = "SELECT machine_name FROM machine WHERE parc_id = %s"
+    query = "SELECT machine_name FROM machine WHERE parc_id = ?"
     cursor.execute(query, (parc_id,))
     results = cursor.fetchall()
 
@@ -79,7 +76,7 @@ def authenticate(username, password):
     conn = get_database_connection()
     cursor = conn.cursor()
 
-    query = "SELECT * FROM users WHERE username = %s AND password = %s"
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
     cursor.execute(query, (username, password))
     result = cursor.fetchone()
 
@@ -96,55 +93,14 @@ def save_form_data(form_data):
     INSERT INTO maintenance_forms 
     (date, Numéro_de_bon, type, technicien1, technicien2, shift, parc, machine, localisation, problem, root_cause, description, 
     machine_stop, stop_time, intervention_start, intervention_end, spare_parts, request_status) 
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     try:
         cursor.execute(query, tuple(form_data.values()))
         conn.commit()
-
-        # Update Excel file
-        excel_file_path = r"D:\AppDb\entry.xlsx"
-        wb = load_workbook("D:\AppDb\entry.xlsx")
-        ws = wb['DataForm']  # Assuming your sheet name is 'DataForm'
-
-        # Extract date components
-        date_obj = form_data['date']
-        day = date_obj.day
-        month = date_obj.month
-        year = date_obj.year
-        week_number = date_obj.isocalendar()[1]  # Get the week number
-
-        # Append new row to the Excel sheet
-        new_row = [
-            date_obj.strftime("%d/%m/%Y"),  # Display full date
-            day,
-            month,
-            year,
-            week_number,
-            form_data['Numéro de bon'],
-            form_data['type'],
-            form_data['technicien1'],
-            form_data['technicien2'],
-            form_data['shift'],
-            form_data['park'],
-            form_data['machine'],
-            form_data['localisation'],
-            form_data['problem'],
-            form_data['root_cause'],
-            form_data['description'],
-            form_data['machine_stop'],
-            form_data['stop_time'],
-            form_data['intervention_start'],
-            form_data['intervention_end'],
-            form_data['spare_parts'],
-            form_data['request_status']
-        ]
-
-        ws.append(new_row)
-        wb.save(excel_file_path)
         st.success("Form submitted successfully!")
-    except mysql.connector.Error as e:
+    except sqlite3.Error as e:
         st.error(f"An error occurred: {e}")
     finally:
         conn.close()
@@ -153,7 +109,7 @@ def save_form_data(form_data):
 def get_base64_of_image_url(url):
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+        response.raise_for_status()
         return base64.b64encode(response.content).decode()
     except requests.exceptions.RequestException as e:
         print(f"Error fetching image: {e}")
@@ -163,13 +119,9 @@ def get_base64_of_image_url(url):
 def show_form():
     st.subheader("Form View")
 
-    # Date calendar
     date = st.date_input("Date", value=datetime.date.today(), key="date_input")
-
-    # Ticket number
     Numéro_de_bon = st.number_input("Numéro de bon", min_value=1, step=1, key="numero_bon_input")
 
-    # Fetch the types from the database
     type_options = get_type_options()
     selected_type = st.selectbox("Type", type_options, key="type_select")
 
@@ -177,42 +129,35 @@ def show_form():
     technicien1 = st.selectbox("Technicien 1", technicien_options, key="technicien1_select")
     technicien2 = st.selectbox("Technicien 2 (Optional)", ["None"] + technicien_options, key="technicien2_select")
 
-    # Fetch the shifts from the database
     shift_options = get_shift_options()
     selected_shift = st.selectbox("Shift", shift_options, key="shift_select")
 
     parc_options = get_parc_options()
     selected_parc_id = st.selectbox("Parc", [parc_name for _, parc_name in parc_options], key="parc_select")
 
-    # Fetch machines based on the selected parc
     selected_parc = next(parc_id for parc_id, parc_name in parc_options if parc_name == selected_parc_id)
     machine_options = get_machine_options(selected_parc)
     selected_machine = st.selectbox("Machine", machine_options, key="machine_select")
 
-    # Text input fields
     localisation = st.text_input("localisation", key="localisation_input")
     problem = st.text_input("Problème", key="problem_input")
     root_cause = st.text_input("Cause Racine", key="root_cause_input")
     description = st.text_area("Description", key="description_input")
 
-    # Machine STOP options
     machine_stop = st.radio("Machine STOP", ["OUI", "NON", "Planifier"], key="machine_stop_radio")
 
-    # Timestamp inputs
     stop_time = st.time_input("Temps début arrêt", step=60, key="stop_time_input")
     intervention_start = st.time_input("Temps début intervention", step=60, key="intervention_start_input")
     intervention_end = st.time_input("Temps fin intervention", step=60, key="intervention_end_input")
 
-    # Spare parts
     spare_parts = st.text_input("Pièces de rechange", key="spare_parts_input")
 
-    # Request status
     status_options = ["En attente", "En cours", "Terminé"]
     request_status = st.selectbox("État de demande", status_options, key="request_status_select")
 
     if st.button("Submit", key="submit_button"):
         form_data = {
-            "date": date,
+            "date": date.isoformat(),
             "Numéro de bon": Numéro_de_bon,
             "type": selected_type,
             "technicien1": technicien1,
@@ -225,26 +170,20 @@ def show_form():
             "root_cause": root_cause,
             "description": description,
             "machine_stop": machine_stop,
-            "stop_time": stop_time.strftime("%H:%M:%S"),
-            "intervention_start": intervention_start.strftime("%H:%M:%S"),
-            "intervention_end": intervention_end.strftime("%H:%M:%S"),
+            "stop_time": stop_time.isoformat(),
+            "intervention_start": intervention_start.isoformat(),
+            "intervention_end": intervention_end.isoformat(),
             "spare_parts": spare_parts,
             "request_status": request_status
         }
-        try:
-            save_form_data(form_data)
-            st.success("Form submitted successfully!")
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+        save_form_data(form_data)
 
 def main():
     st.set_page_config(page_title="Login Page", layout="wide")
 
-    # Load and encode the logo from URL
     logo_url = "https://i.ibb.co/RYBBYBn/1617259109587-removebg-preview.png"
     logo_base64 = get_base64_of_image_url(logo_url)
 
-    # Custom CSS for styling
     st.markdown(f"""
     <style>
     .stApp {{
@@ -287,11 +226,9 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Session state management
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
-    # Display logo and header
     if logo_base64:
         st.markdown(f"""
         <div class="header">
@@ -306,14 +243,12 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # Sidebar with logout button
     if st.session_state["authenticated"]:
         with st.sidebar:
             if st.button("Logout"):
                 st.session_state["authenticated"] = False
                 st.rerun()
 
-    # Authentication page
     if not st.session_state["authenticated"]:
         st.title("Login")
         username = st.text_input("Username")
@@ -323,11 +258,11 @@ def main():
             if authenticate(username, password):
                 st.session_state["authenticated"] = True
                 st.success("Login successful!")
-                st.rerun()  # Rerun the app to show the form
+                st.rerun()
             else:
                 st.error("Invalid username or password")
     else:
-        show_form()  # Show form if already authenticated
+        show_form()
 
 if __name__ == "__main__":
     main()
