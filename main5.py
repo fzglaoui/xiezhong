@@ -4,12 +4,6 @@ import datetime
 import base64
 from openpyxl import load_workbook
 
-# Function to get base64 of binary file
-def get_base64_of_bin_file(bin_file):
-    with open(bin_file, 'rb') as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
-
 # Database connection function
 def get_database_connection():
     return mysql.connector.connect(
@@ -19,20 +13,7 @@ def get_database_connection():
         database='xiezhong'
     )
 
-# Function to get usernames for dropdown
-def get_usernames():
-    conn = get_database_connection()
-    cursor = conn.cursor()
 
-    query = "SELECT username FROM users"
-    cursor.execute(query)
-    results = cursor.fetchall()
-
-    conn.close()
-
-    return [result[0] for result in results]
-
-# Function to fetch technicien options
 def get_technicien_options():
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -45,7 +26,7 @@ def get_technicien_options():
 
     return [result[0] for result in results]
 
-# Function to fetch type options
+
 def get_type_options():
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -58,7 +39,7 @@ def get_type_options():
 
     return [result[0] for result in results]  # Extract the first column from each row
 
-# Function to fetch shift options
+
 def get_shift_options():
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -71,7 +52,7 @@ def get_shift_options():
 
     return [result[0] for result in results]  # Extract the first column from each row
 
-# Function to fetch parc options
+
 def get_parc_options():
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -84,7 +65,7 @@ def get_parc_options():
 
     return results
 
-# Function to fetch machine options based on selected parc
+
 def get_machine_options(parc_id):
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -97,18 +78,20 @@ def get_machine_options(parc_id):
 
     return [result[0] for result in results]
 
+
 # Authentication function
-def authenticate(selected_username, password):
+def authenticate(username, password):
     conn = get_database_connection()
     cursor = conn.cursor()
 
     query = "SELECT * FROM users WHERE username = %s AND password = %s"
-    cursor.execute(query, (selected_username, password))
+    cursor.execute(query, (username, password))
     result = cursor.fetchone()
 
     conn.close()
 
     return result is not None
+
 
 # Function to save form data
 def save_form_data(form_data):
@@ -127,9 +110,9 @@ def save_form_data(form_data):
         conn.commit()
 
         # Update Excel file
-        excel_file_path = r"C:\Users\PC\Desktop\Xiezhong\try1.xlsx"
-        wb = load_workbook(excel_file_path)
-        ws = wb['Feuil1']  # Assuming your sheet name is 'Feuil1'
+        excel_file_path = r"D:\AppDb\entry.xlsx"
+        wb = load_workbook("D:\AppDb\entry.xlsx")
+        ws = wb['DataForm']  # Assuming your sheet name is 'DataForm'
 
         # Extract date components
         date_obj = form_data['date']
@@ -145,7 +128,7 @@ def save_form_data(form_data):
             month,
             year,
             week_number,
-            form_data['Numéro_de_bon'],
+            form_data['Numéro de bon'],
             form_data['type'],
             form_data['technicien1'],
             form_data['technicien2'],
@@ -172,6 +155,14 @@ def save_form_data(form_data):
     finally:
         conn.close()
 
+
+# Function to get base64 of binary file
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+
 # Function to display the form
 def show_form():
     st.subheader("Form View")
@@ -183,32 +174,27 @@ def show_form():
     Numéro_de_bon = st.number_input("Numéro de bon", min_value=1, step=1, key="numero_bon_input")
 
     # Fetch the types from the database
-    type_options = ["Select a type..."] + get_type_options()
+    type_options = get_type_options()
     selected_type = st.selectbox("Type", type_options, key="type_select")
 
-    technicien_options = ["Select a technicien..."] + get_technicien_options()
+    technicien_options = get_technicien_options()
     technicien1 = st.selectbox("Technicien 1", technicien_options, key="technicien1_select")
     technicien2 = st.selectbox("Technicien 2 (Optional)", ["None"] + technicien_options, key="technicien2_select")
 
     # Fetch the shifts from the database
-    shift_options = ["Select a shift..."] + get_shift_options()
+    shift_options = get_shift_options()
     selected_shift = st.selectbox("Shift", shift_options, key="shift_select")
 
     parc_options = get_parc_options()
-    parc_placeholder = ["Select a parc..."] + [parc_name for _, parc_name in parc_options]
-    selected_parc_name = st.selectbox("Parc", parc_placeholder, key="parc_select")
+    selected_parc_id = st.selectbox("Parc", [parc_name for _, parc_name in parc_options], key="parc_select")
 
     # Fetch machines based on the selected parc
-    if selected_parc_name != "Select a parc...":
-        selected_parc_id = next(parc_id for parc_id, parc_name in parc_options if parc_name == selected_parc_name)
-        machine_options = ["Select a machine..."] + get_machine_options(selected_parc_id)
-    else:
-        machine_options = ["Select a machine..."]
-
+    selected_parc = next(parc_id for parc_id, parc_name in parc_options if parc_name == selected_parc_id)
+    machine_options = get_machine_options(selected_parc)
     selected_machine = st.selectbox("Machine", machine_options, key="machine_select")
 
     # Text input fields
-    localisation = st.text_input("Localisation", key="localisation_input")
+    localisation = st.text_input("localisation", key="localisation_input")
     problem = st.text_input("Problème", key="problem_input")
     root_cause = st.text_input("Cause Racine", key="root_cause_input")
     description = st.text_area("Description", key="description_input")
@@ -225,61 +211,36 @@ def show_form():
     spare_parts = st.text_input("Pièces de rechange", key="spare_parts_input")
 
     # Request status
-    status_options = ["Select request status...", "En attente", "En cours", "Terminé"]
+    status_options = ["En attente", "En cours", "Terminé"]
     request_status = st.selectbox("État de demande", status_options, key="request_status_select")
 
-    # Submit button
     if st.button("Submit", key="submit_button"):
-        if selected_type == "Select a type..." or selected_parc_name == "Select a parc..." or selected_machine == "Select a machine..." or request_status == "Select request status...":
-            st.error("Please fill in all required fields.")
-        else:
-            form_data = {
-                "date": date,
-                "Numéro_de_bon": Numéro_de_bon,
-                "type": selected_type,
-                "technicien1": technicien1,
-                "technicien2": technicien2,
-                "shift": selected_shift,
-                "park": selected_parc_name,
-                "machine": selected_machine,
-                "localisation": localisation,
-                "problem": problem,
-                "root_cause": root_cause,
-                "description": description,
-                "machine_stop": machine_stop,
-                "stop_time": stop_time.strftime("%H:%M:%S"),
-                "intervention_start": intervention_start.strftime("%H:%M:%S"),
-                "intervention_end": intervention_end.strftime("%H:%M:%S"),
-                "spare_parts": spare_parts,
-                "request_status": request_status
-            }
-            try:
-                save_form_data(form_data)
-                st.success("Form submitted successfully!")
-            except Exception as e:
-                st.error(f"An error occurred while submitting the form: {e}")
+        form_data = {
+            "date": date,
+            "Numéro de bon": Numéro_de_bon,
+            "type": selected_type,
+            "technicien1": technicien1,
+            "technicien2": technicien2,
+            "shift": selected_shift,
+            "park": selected_parc_id,
+            "machine": selected_machine,
+            "localisation": localisation,
+            "problem": problem,
+            "root_cause": root_cause,
+            "description": description,
+            "machine_stop": machine_stop,
+            "stop_time": stop_time.strftime("%H:%M:%S"),
+            "intervention_start": intervention_start.strftime("%H:%M:%S"),
+            "intervention_end": intervention_end.strftime("%H:%M:%S"),
+            "spare_parts": spare_parts,
+            "request_status": request_status
+        }
+        try:
+            save_form_data(form_data)
+            st.success("Form submitted successfully!")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
 
-# Login page
-def show_login_page():
-    st.title("Login")
-
-    # Get usernames for dropdown
-    usernames = ["Select a username..."] + get_usernames()  # Add a placeholder option
-    selected_username = st.selectbox("Username", usernames)
-
-    password = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-        if selected_username == "Select a username...":
-            st.error("Please select a username")
-        elif authenticate(selected_username, password):
-            st.session_state["authenticated"] = True
-            st.success("Login successful!")
-            st.rerun()  # Rerun the app to show the form
-        else:
-            st.error("Invalid username or password")
-
-# Main function
 def main():
     st.set_page_config(page_title="Login Page", layout="wide")
 
@@ -350,11 +311,22 @@ def main():
                 st.session_state["authenticated"] = False
                 st.rerun()
 
-    # Show login page or form
+    # Authentication page
     if not st.session_state["authenticated"]:
-        show_login_page()
+        st.title("Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Login"):
+            if authenticate(username, password):
+                st.session_state["authenticated"] = True
+                st.success("Login successful!")
+                st.rerun()  # Rerun the app to show the form
+            else:
+                st.error("Invalid username or password")
     else:
         show_form()  # Show form if already authenticated
+
 
 if __name__ == "__main__":
     main()
