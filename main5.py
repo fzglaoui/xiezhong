@@ -2,6 +2,7 @@ import streamlit as st
 import mysql.connector
 import datetime
 import base64
+import requests
 from openpyxl import load_workbook
 
 # Database connection function
@@ -12,7 +13,6 @@ def get_database_connection():
         password='',
         database='xiezhong'
     )
-
 
 def get_technicien_options():
     conn = get_database_connection()
@@ -26,7 +26,6 @@ def get_technicien_options():
 
     return [result[0] for result in results]
 
-
 def get_type_options():
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -38,7 +37,6 @@ def get_type_options():
     conn.close()
 
     return [result[0] for result in results]  # Extract the first column from each row
-
 
 def get_shift_options():
     conn = get_database_connection()
@@ -52,7 +50,6 @@ def get_shift_options():
 
     return [result[0] for result in results]  # Extract the first column from each row
 
-
 def get_parc_options():
     conn = get_database_connection()
     cursor = conn.cursor()
@@ -64,7 +61,6 @@ def get_parc_options():
     conn.close()
 
     return results
-
 
 def get_machine_options(parc_id):
     conn = get_database_connection()
@@ -78,7 +74,6 @@ def get_machine_options(parc_id):
 
     return [result[0] for result in results]
 
-
 # Authentication function
 def authenticate(username, password):
     conn = get_database_connection()
@@ -91,7 +86,6 @@ def authenticate(username, password):
     conn.close()
 
     return result is not None
-
 
 # Function to save form data
 def save_form_data(form_data):
@@ -155,13 +149,15 @@ def save_form_data(form_data):
     finally:
         conn.close()
 
-
-# Function to get base64 of binary file
-def get_base64_of_bin_file(bin_file):
-    with open(bin_file, 'rb') as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
-
+# Function to get base64 of image from URL
+def get_base64_of_image_url(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+        return base64.b64encode(response.content).decode()
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching image: {e}")
+        return ""
 
 # Function to display the form
 def show_form():
@@ -244,9 +240,9 @@ def show_form():
 def main():
     st.set_page_config(page_title="Login Page", layout="wide")
 
-    # Load and encode the logo
-    logo_path = r"C:\Users\PC\Downloads\1617259109587-removebg-preview.png"
-    logo_base64 = get_base64_of_bin_file(logo_path)
+    # Load and encode the logo from URL
+    logo_url = "https://i.ibb.co/RYBBYBn/1617259109587-removebg-preview.png"
+    logo_base64 = get_base64_of_image_url(logo_url)
 
     # Custom CSS for styling
     st.markdown(f"""
@@ -288,7 +284,6 @@ def main():
         font-weight: bold;
         color: white;
     }}
-
     </style>
     """, unsafe_allow_html=True)
 
@@ -297,12 +292,19 @@ def main():
         st.session_state["authenticated"] = False
 
     # Display logo and header
-    st.markdown(f"""
-    <div class="header">
-        <img src="data:image/png;base64,{logo_base64}" class="logo" />
-        <div class="title">Xiezhong Maintenance Management</div>
-    </div>
-    """, unsafe_allow_html=True)
+    if logo_base64:
+        st.markdown(f"""
+        <div class="header">
+            <img src="data:image/png;base64,{logo_base64}" class="logo" />
+            <div class="title">Xiezhong Maintenance Management</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class="header">
+            <div class="title">Xiezhong Maintenance Management</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Sidebar with logout button
     if st.session_state["authenticated"]:
@@ -326,7 +328,6 @@ def main():
                 st.error("Invalid username or password")
     else:
         show_form()  # Show form if already authenticated
-
 
 if __name__ == "__main__":
     main()
